@@ -248,3 +248,50 @@ Clarinet.test({
     );
   },
 });
+
+Clarinet.test({
+  name: "Try to rent an NFT and fail",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const nftOwner = accounts.get("wallet_1")!;
+    const nftRenter = accounts.get("wallet_2")!;
+
+    // First, get an NFT in nftOwner's wallet
+    let block = chain.mineBlock([
+      Tx.contractCall("zebra", "claim", [], nftOwner.address),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
+
+    // Next, list the NFT for rental
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "offer-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(100),
+          types.uint(20),
+          types.uint(10),
+        ],
+        nftOwner.address
+      ),
+    ]);
+
+    // Finally, try to rent it, but don't offer a high enough price
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "rent-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(10),
+        ],
+        nftRenter.address
+      ),
+    ]);
+    block.receipts[0].result.expectErr().expectUint(104);
+  },
+});
