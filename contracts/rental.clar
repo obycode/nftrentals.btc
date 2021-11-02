@@ -1,0 +1,144 @@
+;; rental
+;; This contract enables NFT owners to securely rent out their NFTs to untrusted renters.
+
+;; SIP009 NFT trait on mainnet
+;; (impl-trait 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait.nft-trait)
+;; (use-trait nft-trait 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait.nft-trait)
+
+;; SIP090 NFT trait on testnet
+;; (impl-trait 'ST1HTBVD3JG9C05J7HBJTHGR0GGW7KXW28M5JS8QE.nft-trait.nft-trait)
+;; (use-trait nft-trait 'ST1HTBVD3JG9C05J7HBJTHGR0GGW7KXW28M5JS8QE.nft-trait.nft-trait)
+
+;; SIP009 NFT trait for Clarinet
+(impl-trait .sip009-nft-trait.sip009-nft-trait)
+(use-trait nft-trait .sip009-nft-trait.sip009-nft-trait)
+
+;; constants
+;;
+(define-constant contract-owner tx-sender)
+
+(define-constant err-nft-transfer-failed (err u100))
+(define-constant err-nft-not-found (err u101))
+(define-constant err-nft-not-rentable (err u102))
+(define-constant err-nft-already-rented (err u103))
+(define-constant err-price-too-low (err u104))
+
+;; data maps and vars
+;;
+;; (define-map rental-items
+;;   { collection: <nft-trait>, nft-id: uint }
+;;   { owner: principal, end-height: uint, price: uint, rental-length: uint }
+;; )
+
+(define-map rental-items
+  { collection: principal, nft-id: uint }
+  { owner: principal, renter: (optional principal), end-height: uint, price: uint, rental-length: uint }
+)
+
+(define-map rented-items
+  uint
+  {
+    uri: (optional (string-ascii 256)),
+    collection: principal,
+    nft-id: uint,
+    end-height: uint,
+  }
+)
+
+;; private functions
+;;
+(define-read-only (get-rental-item (collection principal) (nft-id uint))
+  (map-get? rental-items {collection: collection, nft-id: nft-id})
+)
+
+;; public functions
+;;
+
+;; Offer an NFT for rental
+(define-public (offer-nft (collection <nft-trait>) (nft-id uint) (end-height uint) (price uint) (rental-length uint))
+  (begin
+    (unwrap!
+      (contract-call? collection transfer 
+        nft-id tx-sender (as-contract tx-sender))
+      err-nft-transfer-failed)
+
+    (map-set rental-items
+      {
+        collection: (contract-of collection),
+        nft-id: nft-id
+      }
+      {
+        owner: tx-sender,
+        renter: none,
+        end-height: end-height,
+        price: price,
+        rental-length: rental-length
+      }
+    )
+
+    (print {
+      type: "offer-nft",
+      nft: {
+        collection: collection,
+        nft-id: nft-id,
+      }
+    })
+    (ok true)
+  )
+)
+
+;; Rent an NFT
+(define-public (rent-nft (collection <nft-trait>) (nft-id uint) (price uint))
+  (let ((nft (unwrap! (get-rental-item (contract-of collection) nft-id) err-nft-not-found)))
+    (asserts! (<= (+ block-height (get rental-length nft)) (get end-height nft)) err-nft-not-rentable)
+    (asserts! (is-none (get renter nft)) err-nft-already-rented)
+    (asserts! (>= price (get price nft)) err-price-too-low)
+    
+    ;; Update the rental items map
+    (map-set rental-items 
+      {
+        collection: (contract-of collection),
+        nft-id: nft-id
+      }
+      {
+        owner: (get owner nft),
+        renter: (some tx-sender),
+        end-height: (get end-height nft),
+        price: price,
+        rental-length: (get rental-length nft)
+      }
+    )
+    
+    ;; Mint the rental NFT
+
+    (ok true)
+  )
+)
+
+;; SIP009: nft-trait
+(define-non-fungible-token nftrentals uint)
+
+;; Store the last issued token ID
+(define-data-var last-id uint u0)
+
+;; SIP009: Transfer token to a specified principal
+(define-public (transfer (token-id uint) (sender principal) (recipient principal))
+  (if (and
+        (is-eq tx-sender sender))
+      (match (nft-transfer? nftrentals token-id sender recipient)
+        success (ok success)
+        error (err error))
+      (err u500)))
+
+;; SIP009: Get the owner of the specified token ID
+(define-read-only (get-owner (token-id uint)) 
+  (ok (nft-get-owner? nftrentals token-id)))
+
+;; SIP009: Get the last token ID
+(define-read-only (get-last-token-id)
+  (ok (var-get last-id)))
+
+;; SIP009: Get the token URI. You can set it to any other URI
+(define-read-only (get-token-uri (token-id uint))
+  (ok (get uri (unwrap! (map-get? rented-items token-id) err-nft-not-found)))
+)

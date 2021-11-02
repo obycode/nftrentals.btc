@@ -1,0 +1,15 @@
+[project]
+name = "nftrentals.btc"
+requirements = []
+costs_version = 1
+[contracts.rental]
+path = "contracts/rental.clar"
+depends_on = ["sip009-nft-trait"]
+
+[contracts.sip009-nft-trait]
+path = "contracts/sip009-nft-trait.clar"
+depends_on = []
+
+[contracts.zebra]
+path = "contracts/zebra.clar"
+depends_on = []
