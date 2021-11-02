@@ -25,16 +25,14 @@
 
 ;; data maps and vars
 ;;
-;; (define-map rental-items
-;;   { collection: <nft-trait>, nft-id: uint }
-;;   { owner: principal, end-height: uint, price: uint, rental-length: uint }
-;; )
 
+;; Store the items available to rent
 (define-map rental-items
   { collection: principal, nft-id: uint }
   { owner: principal, renter: (optional principal), end-height: uint, price: uint, rental-length: uint }
 )
 
+;; Store the items currently rented
 (define-map rented-items
   uint
   {
@@ -110,8 +108,26 @@
     )
     
     ;; Mint the rental NFT
-
-    (ok true)
+    (let ((next-id (+ u1 (var-get last-id))))
+      (try! (stx-transfer? price tx-sender (get owner nft)))
+      (match (nft-mint? nftrentals next-id tx-sender)
+        success
+          (begin
+            (map-set rented-items
+              next-id
+              {
+                uri: (try! (contract-call? collection get-token-uri nft-id)),
+                collection: (contract-of collection),
+                nft-id: nft-id,
+                end-height: (+ block-height (get rental-length nft)),
+              }
+            )
+            (ok next-id)
+          )
+        error
+          (err error)
+      )
+    )
   )
 )
 
