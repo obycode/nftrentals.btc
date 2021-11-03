@@ -7,6 +7,16 @@ import {
 } from "https://deno.land/x/clarinet@v0.14.0/index.ts";
 import { assertEquals } from "https://deno.land/std@0.90.0/testing/asserts.ts";
 
+const err_nft_transfer_failed = 100;
+const err_nft_not_found = 101;
+const err_nft_not_rentable = 102;
+const err_nft_already_rented = 103;
+const err_price_too_low = 104;
+const err_item_exists = 105;
+const err_burn_failure = 106;
+const err_forbidden = 107;
+const err_internal = 200;
+
 declare global {
   interface Array<T> {
     expectNonFungibleTokenTransferEvent(
@@ -188,7 +198,7 @@ Clarinet.test({
         nftOwner.address
       ),
     ]);
-    block.receipts[0].result.expectErr().expectUint(100);
+    block.receipts[0].result.expectErr().expectUint(err_nft_transfer_failed);
   },
 });
 
@@ -292,6 +302,98 @@ Clarinet.test({
         nftRenter.address
       ),
     ]);
-    block.receipts[0].result.expectErr().expectUint(104);
+    block.receipts[0].result.expectErr().expectUint(err_price_too_low);
+  },
+});
+
+Clarinet.test({
+  name: "Delist an unrented NFT",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const nftOwner = accounts.get("wallet_1")!;
+    const nftRenter = accounts.get("wallet_2")!;
+
+    // First, get an NFT in nftOwner's wallet
+    let block = chain.mineBlock([
+      Tx.contractCall("zebra", "claim", [], nftOwner.address),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
+
+    // Next, list the NFT for rental
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "offer-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(100),
+          types.uint(20),
+          types.uint(10),
+        ],
+        nftOwner.address
+      ),
+    ]);
+
+    // Finally, delist the NFT
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "delist-nft",
+        [types.principal(`${deployer.address}.zebra`), types.uint(1)],
+        nftOwner.address
+      ),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    block.receipts[0].events.expectNonFungibleTokenTransferEvent(
+      `${deployer.address}.zebra::zebra`,
+      `${deployer.address}.rental`,
+      nftOwner.address,
+      1
+    );
+  },
+});
+
+Clarinet.test({
+  name: "Try to delist someone else's NFT",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const nftOwner = accounts.get("wallet_1")!;
+    const nftRenter = accounts.get("wallet_2")!;
+
+    // First, get an NFT in nftOwner's wallet
+    let block = chain.mineBlock([
+      Tx.contractCall("zebra", "claim", [], nftOwner.address),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
+
+    // Next, list the NFT for rental
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "offer-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(100),
+          types.uint(20),
+          types.uint(10),
+        ],
+        nftOwner.address
+      ),
+    ]);
+
+    // Finally, delist the NFT
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "delist-nft",
+        [types.principal(`${deployer.address}.zebra`), types.uint(1)],
+        nftRenter.address
+      ),
+    ]);
+    block.receipts[0].result.expectErr().expectUint(err_forbidden);
   },
 });
