@@ -190,6 +190,46 @@
   )
 )
 
+;; Return a rented NFT
+;; Note that this can be called by anyone, not just the renter or owner. This
+;; allows for a new renter to force the last renter whose term has expired to
+;; return the item so that it may be rented again.
+(define-public (return-nft (collection <nft-trait>) (nft-id uint))
+  (let ((nft (unwrap! (get-rental-item (contract-of collection) nft-id)
+                      err-nft-not-found)))
+    ;; If there is currently a renter:
+    ;;   - If their rental term is in progress, cannot return.
+    ;;   - If not, burn the rental nft.
+    (ok (and
+      (is-some (get renter nft))
+      (let
+        ((rental (unwrap! (map-get? rented-items (get rental-id nft))
+                          err-internal)))
+        (asserts!
+          (or
+            (is-eq (unwrap! (get renter nft) err-internal) tx-sender)
+            (< (get end-height rental) block-height)
+          )
+          err-forbidden)
+        (unwrap! (nft-burn?
+            nftrentals
+            (get rental-id nft)
+            (unwrap! (get renter nft) err-internal))
+          err-burn-failure)
+        (print {
+          type: "return-nft",
+          rental-id: (get rental-id nft),
+          nft: {
+            collection: collection,
+            nft-id: nft-id,
+          }
+        })
+        true
+      )
+    ))
+  )
+)
+
 ;; SIP009: nft-trait
 (define-non-fungible-token nftrentals uint)
 

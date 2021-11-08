@@ -33,7 +33,7 @@ declare global {
     expectNonFungibleTokenBurnEvent(
       token: String,
       sender: String,
-      assetId: String
+      assetId: number
     ): Object;
   }
 
@@ -90,6 +90,26 @@ Array.prototype.expectNonFungibleTokenMintEvent = function (
     }
   }
   throw new Error(`Unable to retrieve expected NonFungibleTokenTransferEvent`);
+};
+
+Array.prototype.expectNonFungibleTokenBurnEvent = function (
+  assetId: String,
+  sender: String,
+  value: number
+) {
+  for (let event of this) {
+    try {
+      let e: any = {};
+      e["assetId"] =
+        event.nft_burn_event.asset_identifier.expectPrincipal(assetId);
+      e["sender"] = event.nft_burn_event.sender.expectPrincipal(sender);
+      e["value"] = event.nft_burn_event.value.expectUint(value);
+      return e;
+    } catch (error) {
+      continue;
+    }
+  }
+  throw new Error(`Unable to retrieve expected NonFungibleTokenBurnEvent`);
 };
 
 Object.prototype.expectRentalItem = function (
@@ -213,8 +233,6 @@ Clarinet.test({
     let block = chain.mineBlock([
       Tx.contractCall("zebra", "claim", [], nftOwner.address),
     ]);
-    block.receipts[0].result.expectOk().expectBool(true);
-    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
 
     // Next, list the NFT for rental
     block = chain.mineBlock([
@@ -270,8 +288,6 @@ Clarinet.test({
     let block = chain.mineBlock([
       Tx.contractCall("zebra", "claim", [], nftOwner.address),
     ]);
-    block.receipts[0].result.expectOk().expectBool(true);
-    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
 
     // Next, list the NFT for rental
     block = chain.mineBlock([
@@ -317,8 +333,6 @@ Clarinet.test({
     let block = chain.mineBlock([
       Tx.contractCall("zebra", "claim", [], nftOwner.address),
     ]);
-    block.receipts[0].result.expectOk().expectBool(true);
-    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
 
     // Next, list the NFT for rental
     block = chain.mineBlock([
@@ -365,8 +379,6 @@ Clarinet.test({
     let block = chain.mineBlock([
       Tx.contractCall("zebra", "claim", [], nftOwner.address),
     ]);
-    block.receipts[0].result.expectOk().expectBool(true);
-    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
 
     // Next, list the NFT for rental
     block = chain.mineBlock([
@@ -441,8 +453,6 @@ Clarinet.test({
     let block = chain.mineBlock([
       Tx.contractCall("zebra", "claim", [], nftOwner.address),
     ]);
-    block.receipts[0].result.expectOk().expectBool(true);
-    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
 
     // Next, list the NFT for rental
     block = chain.mineBlock([
@@ -491,8 +501,6 @@ Clarinet.test({
     let block = chain.mineBlock([
       Tx.contractCall("zebra", "claim", [], nftOwner.address),
     ]);
-    block.receipts[0].result.expectOk().expectBool(true);
-    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
 
     // Next, list the NFT for rental
     block = chain.mineBlock([
@@ -543,8 +551,6 @@ Clarinet.test({
     let block = chain.mineBlock([
       Tx.contractCall("zebra", "claim", [], nftOwner.address),
     ]);
-    block.receipts[0].result.expectOk().expectBool(true);
-    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
 
     // Next, list the NFT for rental
     block = chain.mineBlock([
@@ -592,8 +598,6 @@ Clarinet.test({
     let block = chain.mineBlock([
       Tx.contractCall("zebra", "claim", [], nftOwner.address),
     ]);
-    block.receipts[0].result.expectOk().expectBool(true);
-    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
 
     // Next, list the NFT for rental
     block = chain.mineBlock([
@@ -618,6 +622,251 @@ Clarinet.test({
         "delist-nft",
         [types.principal(`${deployer.address}.zebra`), types.uint(1)],
         nftRenter.address
+      ),
+    ]);
+    block.receipts[0].result.expectErr().expectUint(err_forbidden);
+  },
+});
+
+Clarinet.test({
+  name: "Return an NFT",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const nftOwner = accounts.get("wallet_1")!;
+    const nftRenter = accounts.get("wallet_2")!;
+
+    // First, get an NFT in nftOwner's wallet
+    let block = chain.mineBlock([
+      Tx.contractCall("zebra", "claim", [], nftOwner.address),
+    ]);
+
+    // List the NFT for rental
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "offer-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(100),
+          types.uint(20),
+          types.uint(10),
+        ],
+        nftOwner.address
+      ),
+    ]);
+
+    // Rent it
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "rent-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(20),
+        ],
+        nftRenter.address
+      ),
+    ]);
+
+    // Advance the chain
+    chain.mineEmptyBlockUntil(14);
+
+    // Return it
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "return-nft",
+        [types.principal(`${deployer.address}.zebra`), types.uint(1)],
+        nftRenter.address
+      ),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    block.receipts[0].events.expectNonFungibleTokenBurnEvent(
+      `${deployer.address}.rental::nftrentals`,
+      nftRenter.address,
+      1
+    );
+  },
+});
+
+Clarinet.test({
+  name: "Return someone else's NFT",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const nftOwner = accounts.get("wallet_1")!;
+    const nftRenter = accounts.get("wallet_2")!;
+    const other = accounts.get("wallet_3")!;
+
+    // First, get an NFT in nftOwner's wallet
+    let block = chain.mineBlock([
+      Tx.contractCall("zebra", "claim", [], nftOwner.address),
+    ]);
+
+    // List the NFT for rental
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "offer-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(100),
+          types.uint(20),
+          types.uint(10),
+        ],
+        nftOwner.address
+      ),
+    ]);
+
+    // Rent it
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "rent-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(20),
+        ],
+        nftRenter.address
+      ),
+    ]);
+
+    // Advance the chain
+    chain.mineEmptyBlockUntil(14);
+
+    // Return it
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "return-nft",
+        [types.principal(`${deployer.address}.zebra`), types.uint(1)],
+        other.address
+      ),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    block.receipts[0].events.expectNonFungibleTokenBurnEvent(
+      `${deployer.address}.rental::nftrentals`,
+      nftRenter.address,
+      1
+    );
+  },
+});
+
+Clarinet.test({
+  name: "Return an active NFT rental",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const nftOwner = accounts.get("wallet_1")!;
+    const nftRenter = accounts.get("wallet_2")!;
+
+    // First, get an NFT in nftOwner's wallet
+    let block = chain.mineBlock([
+      Tx.contractCall("zebra", "claim", [], nftOwner.address),
+    ]);
+
+    // List the NFT for rental
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "offer-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(100),
+          types.uint(20),
+          types.uint(10),
+        ],
+        nftOwner.address
+      ),
+    ]);
+
+    // Rent it
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "rent-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(20),
+        ],
+        nftRenter.address
+      ),
+    ]);
+
+    // Return it
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "return-nft",
+        [types.principal(`${deployer.address}.zebra`), types.uint(1)],
+        nftRenter.address
+      ),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    block.receipts[0].events.expectNonFungibleTokenBurnEvent(
+      `${deployer.address}.rental::nftrentals`,
+      nftRenter.address,
+      1
+    );
+  },
+});
+
+Clarinet.test({
+  name: "Try to return someone else's active NFT rental",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const nftOwner = accounts.get("wallet_1")!;
+    const nftRenter = accounts.get("wallet_2")!;
+    const other = accounts.get("wallet_3")!;
+
+    // First, get an NFT in nftOwner's wallet
+    let block = chain.mineBlock([
+      Tx.contractCall("zebra", "claim", [], nftOwner.address),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
+
+    // List the NFT for rental
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "offer-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(100),
+          types.uint(20),
+          types.uint(10),
+        ],
+        nftOwner.address
+      ),
+    ]);
+
+    // Rent it
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "rent-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(20),
+        ],
+        nftRenter.address
+      ),
+    ]);
+
+    // Return it
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "return-nft",
+        [types.principal(`${deployer.address}.zebra`), types.uint(1)],
+        other.address
       ),
     ]);
     block.receipts[0].result.expectErr().expectUint(err_forbidden);
