@@ -1,5 +1,7 @@
-;; rental
-;; This contract enables NFT owners to securely rent out their NFTs to untrusted renters.
+;; @contract nftrentals contract
+;; @version 1
+;; This contract enables NFT owners to securely rent out their NFTs to
+;; untrusted renters.
 
 ;; SIP009 NFT trait on mainnet
 ;; (impl-trait 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait.nft-trait)
@@ -57,16 +59,31 @@
   }
 )
 
-;; private functions
+;; read-only functions
 ;;
+
+;; @desc Retrieve information about an NFT in the rental marketplace
+;; @param collection; Principal specifying the NFT collection
+;; @param nft-id; ID of the NFT within the collection
 (define-read-only (get-rental-item (collection principal) (nft-id uint))
   (map-get? rental-items {collection: collection, nft-id: nft-id})
+)
+
+;; @desc Retrieve information about a rental
+;; @param rental-id; ID of the rental
+(define-read-only (get-rental-item-by-id (rental-id uint))
+  (map-get? rented-items rental-id)
 )
 
 ;; public functions
 ;;
 
-;; Offer an NFT for rental
+;; @desc  Offer an NFT for rental in the marketplace
+;; @param collection; Principal specifying the NFT collection
+;; @param nft-id; ID of the NFT within the collection
+;; @param end-height; Block height at which the NFT will no longer be available to rent
+;; @param price; Price to rent the NFT for the specified length of time
+;; @param rental-length; Number of blocks for one rental period
 (define-public (offer-nft (collection <nft-trait>) (nft-id uint) (end-height uint) (price uint) (rental-length uint))
   (begin
     (unwrap!
@@ -100,7 +117,9 @@
   )
 )
 
-;; Delist an NFT from the marketplace
+;; @desc Delist an NFT from the marketplace
+;; @param collection; Principal specifying the NFT collection
+;; @param nft-id; ID of the NFT within the collection
 (define-public (delist-nft (collection <nft-trait>) (nft-id uint))
   (let ((nft (unwrap! (get-rental-item (contract-of collection) nft-id)
                       err-nft-not-found)))
@@ -135,7 +154,10 @@
   )
 )
 
-;; Rent an NFT
+;; @desc Rent an NFT
+;; @param collection; Principal specifying the NFT collection
+;; @param nft-id; ID of the NFT within the collection
+;; @param price; Price offered for one rental period
 (define-public (rent-nft (collection <nft-trait>) (nft-id uint) (price uint))
   (let ((nft (unwrap! (get-rental-item (contract-of collection) nft-id) err-nft-not-found)))
     (asserts! (<= (+ block-height (get rental-length nft)) (get end-height nft)) err-nft-not-rentable)
@@ -190,10 +212,12 @@
   )
 )
 
-;; Return a rented NFT
+;; @desc Return a rented NFT
 ;; Note that this can be called by anyone, not just the renter or owner. This
 ;; allows for a new renter to force the last renter whose term has expired to
 ;; return the item so that it may be rented again.
+;; @param collection; Principal specifying the NFT collection
+;; @param nft-id; ID of the NFT within the collection
 (define-public (return-nft (collection <nft-trait>) (nft-id uint))
   (let ((nft (unwrap! (get-rental-item (contract-of collection) nft-id)
                       err-nft-not-found)))
@@ -230,7 +254,7 @@
   )
 )
 
-;; SIP009: nft-trait
+;; SIP009: nft-trait for simple rental NFT
 (define-non-fungible-token nftrentals uint)
 
 ;; Store the last issued token ID
