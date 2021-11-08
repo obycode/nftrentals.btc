@@ -260,7 +260,7 @@ Clarinet.test({
 });
 
 Clarinet.test({
-  name: "Try to rent an NFT and fail",
+  name: "Try to rent an NFT with low price",
   async fn(chain: Chain, accounts: Map<string, Account>) {
     const deployer = accounts.get("deployer")!;
     const nftOwner = accounts.get("wallet_1")!;
@@ -303,6 +303,232 @@ Clarinet.test({
       ),
     ]);
     block.receipts[0].result.expectErr().expectUint(err_price_too_low);
+  },
+});
+
+Clarinet.test({
+  name: "Try to rent an NFT that is not for rent",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const nftOwner = accounts.get("wallet_1")!;
+    const nftRenter = accounts.get("wallet_2")!;
+
+    // First, get an NFT in nftOwner's wallet
+    let block = chain.mineBlock([
+      Tx.contractCall("zebra", "claim", [], nftOwner.address),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
+
+    // Next, list the NFT for rental
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "offer-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(100),
+          types.uint(20),
+          types.uint(10),
+        ],
+        nftOwner.address
+      ),
+    ]);
+
+    // Finally, try to rent a different NFT
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "rent-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(2),
+          types.uint(30),
+        ],
+        nftRenter.address
+      ),
+    ]);
+    block.receipts[0].result.expectErr().expectUint(err_nft_not_found);
+  },
+});
+
+Clarinet.test({
+  name: "Try to rent an NFT that is already rented",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const nftOwner = accounts.get("wallet_1")!;
+    const nftRenter1 = accounts.get("wallet_2")!;
+    const nftRenter2 = accounts.get("wallet_2")!;
+
+    // First, get an NFT in nftOwner's wallet
+    let block = chain.mineBlock([
+      Tx.contractCall("zebra", "claim", [], nftOwner.address),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
+
+    // Next, list the NFT for rental
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "offer-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(100),
+          types.uint(20),
+          types.uint(10),
+        ],
+        nftOwner.address
+      ),
+    ]);
+
+    // Rent the NFT
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "rent-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(20),
+        ],
+        nftRenter1.address
+      ),
+    ]);
+
+    // Rent the NFT again (same renter)
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "rent-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(20),
+        ],
+        nftRenter1.address
+      ),
+    ]);
+    block.receipts[0].result.expectErr().expectUint(err_nft_already_rented);
+
+    // Rent the NFT again (different renter)
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "rent-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(20),
+        ],
+        nftRenter2.address
+      ),
+    ]);
+    block.receipts[0].result.expectErr().expectUint(err_nft_already_rented);
+  },
+});
+
+Clarinet.test({
+  name: "Try to rent an NFT that is past its end height",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const nftOwner = accounts.get("wallet_1")!;
+    const nftRenter = accounts.get("wallet_2")!;
+
+    // First, get an NFT in nftOwner's wallet
+    let block = chain.mineBlock([
+      Tx.contractCall("zebra", "claim", [], nftOwner.address),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
+
+    // Next, list the NFT for rental
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "offer-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(100),
+          types.uint(20),
+          types.uint(10),
+        ],
+        nftOwner.address
+      ),
+    ]);
+
+    // Advance the chain past the end height
+    chain.mineEmptyBlockUntil(91);
+
+    // Finally, try to rent the NFT
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "rent-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(20),
+        ],
+        nftRenter.address
+      ),
+    ]);
+    block.receipts[0].result.expectErr().expectUint(err_nft_not_rentable);
+  },
+});
+
+Clarinet.test({
+  name: "Pay more than the asking price",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const nftOwner = accounts.get("wallet_1")!;
+    const nftRenter = accounts.get("wallet_2")!;
+
+    // First, get an NFT in nftOwner's wallet
+    let block = chain.mineBlock([
+      Tx.contractCall("zebra", "claim", [], nftOwner.address),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    assertEquals(block.receipts[0].events[0].type, "nft_mint_event");
+
+    // Next, list the NFT for rental
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "offer-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(100),
+          types.uint(20),
+          types.uint(10),
+        ],
+        nftOwner.address
+      ),
+    ]);
+
+    // Finally, try to rent the NFT
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "rent-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(30),
+        ],
+        nftRenter.address
+      ),
+    ]);
+    block.receipts[0].result.expectOk().expectUint(1);
+    block.receipts[0].events.expectSTXTransferEvent(
+      30,
+      nftRenter.address,
+      nftOwner.address
+    );
   },
 });
 

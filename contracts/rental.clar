@@ -173,6 +173,14 @@
                 end-height: (+ block-height (get rental-length nft)),
               }
             )
+            (print {
+              type: "rent-nft",
+              rental-id: next-id,
+              nft: {
+                collection: collection,
+                nft-id: nft-id,
+              }
+            })
             (ok next-id)
           )
         error
