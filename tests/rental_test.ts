@@ -15,6 +15,7 @@ const err_price_too_low = 104;
 const err_item_exists = 105;
 const err_burn_failure = 106;
 const err_forbidden = 107;
+const err_mismatched_rental_length = 108;
 const err_internal = 200;
 
 declare global {
@@ -259,6 +260,7 @@ Clarinet.test({
           types.principal(`${deployer.address}.zebra`),
           types.uint(1),
           types.uint(20),
+          types.uint(10),
         ],
         nftRenter.address
       ),
@@ -314,6 +316,7 @@ Clarinet.test({
           types.principal(`${deployer.address}.zebra`),
           types.uint(1),
           types.uint(10),
+          types.uint(10),
         ],
         nftRenter.address
       ),
@@ -359,6 +362,7 @@ Clarinet.test({
           types.principal(`${deployer.address}.zebra`),
           types.uint(2),
           types.uint(30),
+          types.uint(10),
         ],
         nftRenter.address
       ),
@@ -405,6 +409,7 @@ Clarinet.test({
           types.principal(`${deployer.address}.zebra`),
           types.uint(1),
           types.uint(20),
+          types.uint(10),
         ],
         nftRenter1.address
       ),
@@ -419,6 +424,7 @@ Clarinet.test({
           types.principal(`${deployer.address}.zebra`),
           types.uint(1),
           types.uint(20),
+          types.uint(10),
         ],
         nftRenter1.address
       ),
@@ -434,6 +440,7 @@ Clarinet.test({
           types.principal(`${deployer.address}.zebra`),
           types.uint(1),
           types.uint(20),
+          types.uint(10),
         ],
         nftRenter2.address
       ),
@@ -482,11 +489,58 @@ Clarinet.test({
           types.principal(`${deployer.address}.zebra`),
           types.uint(1),
           types.uint(20),
+          types.uint(10),
         ],
         nftRenter.address
       ),
     ]);
     block.receipts[0].result.expectErr().expectUint(err_nft_not_rentable);
+  },
+});
+
+Clarinet.test({
+  name: "Try to rent an NFT with different rental length",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const nftOwner = accounts.get("wallet_1")!;
+    const nftRenter = accounts.get("wallet_2")!;
+
+    // First, get an NFT in nftOwner's wallet
+    let block = chain.mineBlock([
+      Tx.contractCall("zebra", "claim", [], nftOwner.address),
+    ]);
+
+    // Next, list the NFT for rental
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "offer-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(100),
+          types.uint(20),
+          types.uint(10),
+        ],
+        nftOwner.address
+      ),
+    ]);
+
+    // Finally, try to rent the NFT
+    block = chain.mineBlock([
+      Tx.contractCall(
+        "rental",
+        "rent-nft",
+        [
+          types.principal(`${deployer.address}.zebra`),
+          types.uint(1),
+          types.uint(20),
+          types.uint(20),
+        ],
+        nftRenter.address
+      ),
+    ]);
+    block.receipts[0].result.expectErr().expectUint(err_mismatched_rental_length);
   },
 });
 
@@ -527,6 +581,7 @@ Clarinet.test({
           types.principal(`${deployer.address}.zebra`),
           types.uint(1),
           types.uint(30),
+          types.uint(10),
         ],
         nftRenter.address
       ),
@@ -665,6 +720,7 @@ Clarinet.test({
           types.principal(`${deployer.address}.zebra`),
           types.uint(1),
           types.uint(20),
+          types.uint(10),
         ],
         nftRenter.address
       ),
@@ -729,6 +785,7 @@ Clarinet.test({
           types.principal(`${deployer.address}.zebra`),
           types.uint(1),
           types.uint(20),
+          types.uint(10),
         ],
         nftRenter.address
       ),
@@ -792,6 +849,7 @@ Clarinet.test({
           types.principal(`${deployer.address}.zebra`),
           types.uint(1),
           types.uint(20),
+          types.uint(10),
         ],
         nftRenter.address
       ),
@@ -855,6 +913,7 @@ Clarinet.test({
           types.principal(`${deployer.address}.zebra`),
           types.uint(1),
           types.uint(20),
+          types.uint(10),
         ],
         nftRenter.address
       ),

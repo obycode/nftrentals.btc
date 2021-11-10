@@ -27,6 +27,7 @@
 (define-constant err-item-exists (err u105))
 (define-constant err-burn-failure (err u106))
 (define-constant err-forbidden (err u107))
+(define-constant err-mismatched-rental-length (err u108))
 (define-constant err-internal (err u200))
 
 ;; data maps and vars
@@ -158,11 +159,12 @@
 ;; @param collection; Principal specifying the NFT collection
 ;; @param nft-id; ID of the NFT within the collection
 ;; @param price; Price offered for one rental period
-(define-public (rent-nft (collection <nft-trait>) (nft-id uint) (price uint))
+(define-public (rent-nft (collection <nft-trait>) (nft-id uint) (price uint) (length uint))
   (let ((nft (unwrap! (get-rental-item (contract-of collection) nft-id) err-nft-not-found)))
     (asserts! (<= (+ block-height (get rental-length nft)) (get end-height nft)) err-nft-not-rentable)
     (asserts! (is-none (get renter nft)) err-nft-already-rented)
     (asserts! (>= price (get price nft)) err-price-too-low)
+    (asserts! (is-eq length (get rental-length nft)) err-mismatched-rental-length)
 
     ;; Mint the rental NFT
     (let ((next-id (+ u1 (var-get last-id))))
