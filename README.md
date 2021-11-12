@@ -88,6 +88,12 @@ there is currently no incentive for them to do so), by the owner (incentivized
 to return the item so that it may be rented again), or by another user
 (incentivized to return the item so that they may rent it themselves).
 
+The URL for this NFT is currently just copied from the NFT which is rented for
+simplicity. A true implementation would likely generate a new URL which includes
+the URL to the original NFT, but also includes the principal and ID of the NFT
+which is being rented. That makes the work a bit easier for consumers of this
+NFT.
+
 Nothing prevents a renter from "sub-leasing" a rented NFT if they think that the
 rental price is lower than the current market price for the item, and this could
 be a common occurence which would help to stabilize the price of rentals.
